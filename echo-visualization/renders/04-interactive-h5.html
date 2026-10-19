@@ -1,0 +1,186 @@
+<!-- ============================================================
+  可交互 H5 · 分步演示 + 参数滑杆
+  何时用：交互确实揭示了静态图给不了的东西 —— 状态如何推进、
+  参数变化如何改变结果。只为了 hover 高亮或入场动画就别用。
+  两个必须保留的性质：
+   1. 首屏即完整：第 0 步直接渲染，结论写在 lede 里，不动手也读得懂。
+   2. 步骤由模型函数生成（buildSteps），换算法/换模型只改这一个函数，
+      渲染和控件不用动 —— 这比手写一串 steps 数组好维护得多。
+============================================================ -->
+<html style="margin:0;padding:0;">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>示例分步演示 — 按主题替换</title>
+<style>
+:root{
+  --bg:#FBFBFA; --surface:#FFFFFF;
+  --ink:#1A1A18; --ink-2:#6B6B66; --ink-3:#9D9D96;
+  --line:rgba(26,26,24,.10); --line-soft:rgba(26,26,24,.055);
+  --accent:#3D5A80; --s2:#C96E4A; --s3:#5B8C6E;
+  --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#131312; --surface:#1A1A19;
+    --ink:#EDEDEA; --ink-2:#A2A29B; --ink-3:#6E6E67;
+    --line:rgba(237,237,234,.12); --line-soft:rgba(237,237,234,.07);
+    --accent:#8FADD6; --s2:#E8946B; --s3:#85BC9A;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg)}
+.viz{font-family:var(--font);color:var(--ink);background:var(--bg);
+  padding:28px 24px 22px;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;letter-spacing:.10em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;margin:0 0 10px}
+.title{font-size:19px;line-height:1.35;font-weight:600;letter-spacing:-.011em;margin:0 0 7px}
+.lede{font-size:13.5px;line-height:1.62;color:var(--ink-2);margin:0 0 20px;max-width:62ch}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px 16px 14px}
+
+/* —— 元素格子 ——
+   下标和格子必须包在同一个 flex item 里。拆成两行独立的 flex 容器时，
+   窄屏一换行下标就和格子错位，全挤到最下面去了。 */
+.cells{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 14px}
+.cellwrap{flex:1 1 44px;min-width:38px;display:flex;flex-direction:column;gap:3px}
+.cellidx{text-align:center;font-size:10px;color:var(--ink-3);font-family:var(--mono)}
+.cell{height:42px;border-radius:7px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:13px;font-weight:600;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink-3);
+  transition:background .14s ease,border-color .14s ease,color .14s ease}
+.cell.in{color:var(--ink);border-color:var(--line)}
+.cell.out{opacity:.34;text-decoration:line-through}
+.cell.mid{border-color:var(--accent);border-width:1.5px;color:var(--ink);
+  background:color-mix(in srgb,var(--accent) 9%,transparent)}
+.cell.hit{border-color:var(--s3);border-width:1.5px;color:var(--ink);
+  background:color-mix(in srgb,var(--s3) 14%,transparent)}
+/* —— 步骤说明 + 控件 —— */
+.note{font-size:13px;line-height:1.6;color:var(--ink);margin:0;min-height:2.9em}
+.note.done{color:var(--s3);font-weight:600}
+.bar{height:2px;background:var(--line-soft);border-radius:1px;margin:14px 0 12px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);
+  width:0;transition:width .18s ease}
+.ctrl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+button{font-family:var(--font);font-size:12.5px;font-weight:600;color:var(--ink);
+  background:var(--surface);border:1px solid var(--line);border-radius:7px;
+  padding:7px 13px;cursor:pointer;transition:border-color .14s ease,opacity .14s ease}
+button:hover:not(:disabled){border-color:var(--ink-3)}
+button:disabled{opacity:.38;cursor:default}
+.count{font-size:11.5px;color:var(--ink-3);font-family:var(--mono);margin-left:auto}
+
+/* —— 参数滑杆 —— */
+.slider-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 10px}
+.slider-row label{font-size:11px;letter-spacing:.05em;color:var(--ink-3);font-weight:600}
+input[type=range]{flex:1 1 150px;accent-color:var(--accent);min-width:120px}
+.out-val{font-size:25px;font-weight:600;letter-spacing:-.02em;margin:0}
+.out-val small{font-size:12.5px;font-weight:500;color:var(--ink-3);margin-left:3px}
+.out-sub{font-size:11.5px;color:var(--ink-3);margin:4px 0 0}
+
+.foot{margin:16px 0 0;padding-top:12px;border-top:1px solid var(--line-soft);
+  font-size:11.5px;line-height:1.6;color:var(--ink-3)}
+@media (max-width:560px){.viz{padding:20px 16px 18px}.title{font-size:17px}}
+</style>
+
+<div class="viz">
+  <p class="eyebrow">分步演示</p>
+  <h1 class="title">二分查找用 4 次比较就在 12 个元素里定位到 41</h1>
+  <p class="lede">每次比较都把候选窗口对半砍掉。线性扫描最坏要看 12 次，二分最坏 4 次 —— 差距随数组变大迅速拉开。</p>
+
+  <div class="panel">
+    <div class="cells" id="cells"></div>
+    <p class="note" id="note"></p>
+    <div class="bar"><i id="prog"></i></div>
+    <div class="ctrl">
+      <button id="prev">◀ 上一步</button>
+      <button id="next">下一步 ▶</button>
+      <button id="reset">重置</button>
+      <span class="count" id="count"></span>
+    </div>
+  </div>
+
+  <!-- —— 第二种正当交互：参数变化 —— -->
+  <div class="panel" style="margin-top:12px">
+    <div class="slider-row">
+      <label for="n">数组长度 N</label>
+      <input type="range" id="n" min="8" max="4096" step="4" value="12">
+    </div>
+    <p class="out-val" id="cmp">4<small>次比较（最坏）</small></p>
+    <p class="out-sub" id="cmpsub">N = 12 · 线性扫描最坏需要 12 次</p>
+  </div>
+
+  <p class="foot">可用 ← → 方向键切换步骤 · 示意演示，非性能基准</p>
+</div>
+
+<script>
+(function(){
+  // 目标特意不选在首个中点上：选 23 会第一次比较就命中，演示不出窗口收缩。
+  var ARR = [3,7,11,15,19,23,27,31,37,41,47,53], TARGET = 41;
+
+  // —— 换算法只改这个函数：产出 {lo,hi,mid,note,done} 的序列 ——
+  function buildSteps(a, t){
+    var s = [], lo = 0, hi = a.length - 1, probes = 0;
+    s.push({ lo:lo, hi:hi, mid:null, note:'初始窗口覆盖全部 ' + a.length + ' 个元素。' });
+    while (lo <= hi) {
+      var mid = Math.floor((lo + hi) / 2); probes++;
+      s.push({ lo:lo, hi:hi, mid:mid, note:'第 ' + probes + ' 次比较：中点是 ' + a[mid] + '（下标 ' + mid + '），对比目标 ' + t + '。' });
+      if (a[mid] === t) {
+        s.push({ lo:mid, hi:mid, mid:mid, hit:mid, done:true,
+                 note:'命中：' + t + ' 在下标 ' + mid + '，一共只用了 ' + probes + ' 次比较。' });
+        return s;
+      }
+      if (a[mid] < t) { lo = mid + 1;
+        s.push({ lo:lo, hi:hi, mid:null, note:a[mid] + ' < ' + t + '，左半连同中点一起丢弃，窗口收缩到下标 ' + lo + '–' + hi + '。' });
+      } else { hi = mid - 1;
+        s.push({ lo:lo, hi:hi, mid:null, note:a[mid] + ' > ' + t + '，右半连同中点一起丢弃，窗口收缩到下标 ' + lo + '–' + hi + '。' });
+      }
+    }
+    s.push({ lo:lo, hi:hi, mid:null, done:true, note:'窗口已空，' + t + ' 不在数组中（共 ' + probes + ' 次比较）。' });
+    return s;
+  }
+
+  var STEPS = buildSteps(ARR, TARGET), at = 0;
+  var $ = function(id){ return document.getElementById(id); };
+
+  function render(){
+    var st = STEPS[at];
+    $('cells').innerHTML = ARR.map(function(v, i){
+      var c = 'cell ';
+      if (st.hit === i)                   c += 'hit';
+      else if (i < st.lo || i > st.hi)    c += 'out';
+      else if (st.mid === i)              c += 'mid';
+      else                                c += 'in';
+      return '<div class="cellwrap"><div class="' + c + '">' + v + '</div>' +
+             '<span class="cellidx">' + i + '</span></div>';
+    }).join('');
+    $('note').textContent = st.note;
+    $('note').className = 'note' + (st.done ? ' done' : '');
+    $('prog').style.width = (at / (STEPS.length - 1) * 100) + '%';
+    $('count').textContent = (at + 1) + ' / ' + STEPS.length;
+    $('prev').disabled = at === 0;
+    $('next').disabled = at === STEPS.length - 1;
+  }
+  function go(d){ at = Math.max(0, Math.min(STEPS.length - 1, at + d)); render(); }
+
+  $('prev').onclick = function(){ go(-1); };
+  $('next').onclick = function(){ go(1); };
+  $('reset').onclick = function(){ at = 0; render(); };
+  addEventListener('keydown', function(e){
+    if (e.key === 'ArrowRight') { go(1); e.preventDefault(); }
+    if (e.key === 'ArrowLeft')  { go(-1); e.preventDefault(); }
+  });
+  render();   // 首屏静态可读
+
+  // —— 滑杆：参数 → 即时重算 ——
+  var n = $('n');
+  function recalc(){
+    var N = +n.value, worst = Math.ceil(Math.log2(N + 1));
+    $('cmp').innerHTML = worst + '<small>次比较（最坏）</small>';
+    $('cmpsub').textContent = 'N = ' + N + ' · 线性扫描最坏需要 ' + N + ' 次';
+  }
+  n.oninput = recalc; recalc();
+})();
+</script>
+</html>

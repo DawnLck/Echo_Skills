@@ -1,0 +1,158 @@
+<!-- ============================================================
+  AntV G2 v5 · 统计图表（折线 / 柱 / 面积 / 散点 / 箱线 / 热力）
+  何时用：结论依赖精确数值的趋势、分布、相关性或多指标比较。
+  三个关键做法，换数据时请保留：
+   1. 主题不靠 G2 内置，而是把 CSS 变量读出来喂给坐标轴和色板 —— 深浅色自动跟随。
+   2. 图例用 HTML 手写、G2 的 legend 关掉 —— 排版更好且永远不会被画布裁切。
+   3. CDN 失败时降级成同数据表格 —— 不会留下一块空白。
+  换图形：把 chart.line() 换成 .interval()（柱）/ .area() / .point() / .cell()（热力）。
+============================================================ -->
+<html style="margin:0;padding:0;">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>示例趋势图 — 按主题替换</title>
+<style>
+:root{
+  --bg:#FBFBFA; --surface:#FFFFFF;
+  --ink:#1A1A18; --ink-2:#6B6B66; --ink-3:#9D9D96;
+  --line:rgba(26,26,24,.10); --line-soft:rgba(26,26,24,.055);
+  --grid:rgba(26,26,24,.07);
+  --accent:#3D5A80;
+  --s1:#3D5A80; --s2:#C96E4A; --s3:#5B8C6E;
+  --s4:#8A6FA8; --s5:#B8902B; --s6:#4E8EA8;
+  --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#131312; --surface:#1A1A19;
+    --ink:#EDEDEA; --ink-2:#A2A29B; --ink-3:#6E6E67;
+    --line:rgba(237,237,234,.12); --line-soft:rgba(237,237,234,.07);
+    --grid:rgba(237,237,234,.08);
+    --accent:#8FADD6;
+    --s1:#8FADD6; --s2:#E8946B; --s3:#85BC9A;
+    --s4:#B59AD1; --s5:#E0C258; --s6:#73B9D6;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg)}
+.viz{font-family:var(--font);color:var(--ink);background:var(--bg);
+  padding:28px 24px 22px;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;letter-spacing:.10em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;margin:0 0 10px}
+.title{font-size:19px;line-height:1.35;font-weight:600;letter-spacing:-.011em;margin:0 0 7px}
+.lede{font-size:13.5px;line-height:1.62;color:var(--ink-2);margin:0 0 18px;max-width:62ch}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0 0 12px;font-size:12px;color:var(--ink-2)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2.5px;margin-right:6px;vertical-align:-1px}
+#chart{height:302px;width:100%}
+.foot{margin:16px 0 0;padding-top:12px;border-top:1px solid var(--line-soft);
+  font-size:11.5px;line-height:1.6;color:var(--ink-3)}
+.foot b{font-weight:600;color:var(--ink-2)}
+/* 降级表格 */
+#fallback{display:none;margin-top:4px;border:1px solid var(--line);
+  border-radius:var(--radius);overflow:hidden}
+#fallback table{width:100%;border-collapse:collapse;font-size:12.5px}
+#fallback th,#fallback td{padding:7px 12px;text-align:right;border-bottom:1px solid var(--line-soft)}
+#fallback th{font-size:11px;letter-spacing:.05em;color:var(--ink-3);font-weight:600;
+  background:var(--surface)}
+#fallback th:first-child,#fallback td:first-child{text-align:left}
+#fallback tr:last-child td{border-bottom:0}
+@media (max-width:560px){.viz{padding:20px 16px 18px}.title{font-size:17px}#chart{height:244px}}
+</style>
+
+<div class="viz">
+  <p class="eyebrow">示例数据 · 趋势</p>
+  <h1 class="title">开放 API 在 7 月反超移动端 SDK，之后差距持续拉大</h1>
+  <p class="lede">1 月 SDK 还领先 29 万次；7 月两条线交叉，到 12 月 API 已接近 SDK 的 3 倍。总量在涨，但增量全部来自 API。</p>
+
+  <!-- 手写图例：顺序、措辞、换行都可控 -->
+  <div class="legend">
+    <span><i style="background:var(--s1)"></i>开放 API</span>
+    <span><i style="background:var(--s2)"></i>移动端 SDK</span>
+  </div>
+
+  <div id="chart"></div>
+  <div id="fallback"></div>
+
+  <p class="foot"><b>数据</b>：示例数据，非真实业务数字 · <b>口径</b>：2025 年月度日均调用量，单位万次</p>
+</div>
+
+<script src="https://unpkg.com/@antv/g2@5.4.8/dist/g2.min.js"
+        onerror="window.__g2fail=1"></script>
+<script>
+(function(){
+  // —— 数据内联、自包含：renderer 不能依赖外部数据源 ——
+  var MONTH = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  // 同一根 y 轴上的系列必须同单位。万次和百分比放一起，
+  // 量纲小的那条会被压成贴着轴的直线——看着像「没变化」，其实是图错了。
+  // 真要对比不同单位：改成上下两张小图（small multiples），或先归一化成指数。
+  var API = [42,46,49,55,58,63,72,79,88,99,112,124];
+  var SDK = [71,70,72,68,66,64,61,57,54,50,46,42];
+  var SERIES = [
+    { name:'开放 API',   token:'--s1', values:API },
+    { name:'移动端 SDK', token:'--s2', values:SDK }
+  ];
+  var DATA = [];
+  SERIES.forEach(function(s){
+    s.values.forEach(function(v,i){ DATA.push({ month:MONTH[i], series:s.name, value:v }); });
+  });
+
+  // —— 把设计 token 读出来，图表就自动跟随深浅色 ——
+  var css = getComputedStyle(document.documentElement);
+  var T = function(n){ return css.getPropertyValue(n).trim(); };
+  var FONT = T('--font'), INK3 = T('--ink-3'), GRID = T('--grid'), LINE = T('--line');
+  var RANGE = SERIES.map(function(s){ return T(s.token); });
+  var isDark = matchMedia('(prefers-color-scheme: dark)').matches
+            && document.documentElement.dataset.theme !== 'light';
+
+  function table(){
+    var h = '<table><thead><tr><th>月份</th>' +
+      SERIES.map(function(s){ return '<th>'+s.name+'</th>'; }).join('') + '</tr></thead><tbody>';
+    MONTH.forEach(function(m,i){
+      h += '<tr><td>'+m+'</td>' +
+        SERIES.map(function(s){ return '<td>'+s.values[i]+'</td>'; }).join('') + '</tr>';
+    });
+    document.getElementById('fallback').innerHTML = h + '</tbody></table>';
+    document.getElementById('fallback').style.display = 'block';
+    document.getElementById('chart').style.display = 'none';
+  }
+
+  function draw(){
+    var chart = new G2.Chart({
+      container:'chart', autoFit:true,
+      // 画布透明，底色交给 --bg，深浅色切换时不会出现白块
+      theme:{ type: isDark ? 'classicDark' : 'classic', view:{ viewFill:'transparent' } },
+      paddingTop:8, paddingRight:12, paddingBottom:30, paddingLeft:44
+    });
+    chart.data(DATA);
+    chart.line()
+      .encode('x','month').encode('y','value').encode('color','series')
+      .scale('color',{ range:RANGE })
+      .scale('y',{ nice:true })
+      .style('lineWidth',1.75).style('lineJoin','round').style('lineCap','round')
+      // 必须关掉入场动画。宿主若离屏/后台渲染，requestAnimationFrame 被节流，
+      // 截图只强制出一帧：坐标轴是静态的能画出来，线却还停在动画第 0 帧 ——
+      // 结果就是一张「只有坐标轴、一条线都没有」的空图。
+      // 注意是写在 mark 上，Chart 构造参数里的 animate:false 不生效。
+      .animate('enter',{ type:null, duration:0 })
+      .legend(false)                                  // 图例已在 HTML 手写
+      .axis('x',{
+        labelFill:INK3, labelOpacity:1, labelFontSize:11, labelFontFamily:FONT,
+        line:true, lineStroke:LINE, lineLineWidth:1,
+        tick:false, grid:false, title:false
+      })
+      .axis('y',{
+        labelFill:INK3, labelOpacity:1, labelFontSize:11, labelFontFamily:FONT,
+        line:false, tick:false, title:false,
+        // classic 主题自带 gridStrokeOpacity≈0.1、虚线：不覆盖的话 --grid 再乘一次透明度，网格线实际看不见
+        grid:true, gridStroke:GRID, gridLineWidth:1, gridStrokeOpacity:1, gridLineDash:[0,0]
+      })
+      .tooltip({ title:'month' });
+    chart.render();
+  }
+
+  if (window.__g2fail || !window.G2) { table(); return; }
+  try { draw(); } catch(e) { table(); }
+})();
+</script>
+</html>

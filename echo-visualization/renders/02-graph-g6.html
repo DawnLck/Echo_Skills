@@ -1,0 +1,144 @@
+<!-- ============================================================
+  AntV G6 v5 · 关系图（依赖 / 血缘 / 组织 / 知识图谱）
+  何时用：要看的是「谁连着谁」——拓扑、层级、传导路径、环。
+  布局选择是这类图成败的关键：
+   · antv-dagre  有方向的层级（依赖、血缘、调用链）→ 整齐、确定、可复现
+   · d3-force    无方向的网络（共现、社交）→ 看聚类，但每次形状不同
+   · radial      以一个中心节点展开的自我网络
+  默认用 dagre：力导图在模板里会随机重叠标签，确定性布局才有设计感。
+============================================================ -->
+<html style="margin:0;padding:0;">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>示例依赖关系图 — 按主题替换</title>
+<style>
+:root{
+  --bg:#FBFBFA; --surface:#FFFFFF;
+  --ink:#1A1A18; --ink-2:#6B6B66; --ink-3:#9D9D96;
+  --line:rgba(26,26,24,.10); --line-soft:rgba(26,26,24,.055);
+  --accent:#3D5A80;
+  --s1:#3D5A80; --s2:#C96E4A; --s3:#5B8C6E;
+  --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#131312; --surface:#1A1A19;
+    --ink:#EDEDEA; --ink-2:#A2A29B; --ink-3:#6E6E67;
+    --line:rgba(237,237,234,.12); --line-soft:rgba(237,237,234,.07);
+    --accent:#8FADD6; --s1:#8FADD6; --s2:#E8946B; --s3:#85BC9A;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg)}
+.viz{font-family:var(--font);color:var(--ink);background:var(--bg);
+  padding:28px 24px 22px;-webkit-font-smoothing:antialiased}
+.eyebrow{font-size:11px;letter-spacing:.10em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;margin:0 0 10px}
+.title{font-size:19px;line-height:1.35;font-weight:600;letter-spacing:-.011em;margin:0 0 7px}
+.lede{font-size:13.5px;line-height:1.62;color:var(--ink-2);margin:0 0 14px;max-width:62ch}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0 0 10px;font-size:12px;color:var(--ink-2)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2.5px;margin-right:6px;vertical-align:-1px}
+#graph{height:368px;width:100%;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--surface);overflow:hidden}
+.hint{font-size:11px;color:var(--ink-3);margin:8px 0 0}
+.foot{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line-soft);
+  font-size:11.5px;line-height:1.6;color:var(--ink-3)}
+#fallback{display:none;font-size:12.5px;line-height:1.75;color:var(--ink-2)}
+#fallback ul{margin:4px 0 0;padding-left:18px}
+#fallback b{color:var(--ink);font-weight:600}
+@media (max-width:560px){.viz{padding:20px 16px 18px}.title{font-size:17px}#graph{height:300px}}
+</style>
+
+<div class="viz">
+  <p class="eyebrow">示例数据 · 依赖</p>
+  <h1 class="title">结算服务是整条链路上唯一的单点</h1>
+  <p class="lede">四个上游服务全部直接依赖结算服务，而它自己只连一个库。它挂了，订单、风控、对账、客服同时不可用。</p>
+
+  <div class="legend">
+    <span><i style="background:var(--s2)"></i>单点依赖</span>
+    <span><i style="background:var(--s1)"></i>业务服务</span>
+    <span><i style="background:var(--ink-3)"></i>存储</span>
+  </div>
+
+  <div id="graph"></div>
+  <div id="fallback"></div>
+  <p class="hint">可拖拽平移、滚轮缩放；悬停节点高亮它的直接邻居。</p>
+  <p class="foot">示意拓扑 · 示例数据，非真实服务清单</p>
+</div>
+
+<script src="https://unpkg.com/@antv/g6@5.1.1/dist/g6.min.js"
+        onerror="window.__g6fail=1"></script>
+<script>
+(function(){
+  // kind: hub = 单点, svc = 业务服务, store = 存储
+  var NODES = [
+    { id:'order',  data:{ label:'订单服务', kind:'svc'   } },
+    { id:'risk',   data:{ label:'风控服务', kind:'svc'   } },
+    { id:'recon',  data:{ label:'对账服务', kind:'svc'   } },
+    { id:'cs',     data:{ label:'客服工单', kind:'svc'   } },
+    { id:'settle', data:{ label:'结算服务', kind:'hub'   } },
+    { id:'db',     data:{ label:'结算主库', kind:'store' } }
+  ];
+  var EDGES = [
+    { source:'order', target:'settle' }, { source:'risk',  target:'settle' },
+    { source:'recon', target:'settle' }, { source:'cs',    target:'settle' },
+    { source:'settle', target:'db' }
+  ];
+
+  var css = getComputedStyle(document.documentElement);
+  var T = function(n){ return css.getPropertyValue(n).trim(); };
+  var FONT = T('--font'), INK = T('--ink'), INK3 = T('--ink-3');
+  var SURFACE = T('--surface'), LINE = T('--line');
+  var KIND = { hub:T('--s2'), svc:T('--s1'), store:T('--ink-3') };
+
+  function outline(){
+    var into = {};
+    EDGES.forEach(function(e){ (into[e.target] = into[e.target] || []).push(e.source); });
+    var name = {}; NODES.forEach(function(n){ name[n.id] = n.data.label; });
+    var h = '';
+    Object.keys(into).forEach(function(t){
+      h += '<p style="margin:6px 0 0"><b>'+name[t]+'</b> 被依赖于：</p><ul>' +
+           into[t].map(function(s){ return '<li>'+name[s]+'</li>'; }).join('') + '</ul>';
+    });
+    var fb = document.getElementById('fallback');
+    fb.innerHTML = h; fb.style.display = 'block';
+    document.getElementById('graph').style.display = 'none';
+    document.querySelector('.hint').style.display = 'none';
+  }
+
+  function draw(){
+    var graph = new G6.Graph({
+      container:'graph',
+      autoFit:{ type:'view', options:{ padding:18 } },
+      // 同 G2：离屏渲染时 rAF 被节流，入场动画跑不完，节点会停在半透明状态
+      animation:false,
+      data:{ nodes:NODES, edges:EDGES },
+      node:{
+        type:'rect',
+        style:{
+          size:[104,36], radius:7,
+          fill:SURFACE, lineWidth:1.4,
+          stroke:function(d){ return KIND[d.data.kind] || LINE; },
+          labelText:function(d){ return d.data.label; },
+          labelFill:INK, labelFontSize:11.5, labelFontFamily:FONT,
+          labelFontWeight:600, labelPlacement:'center'
+        }
+      },
+      edge:{
+        type:'cubic-vertical',
+        style:{ stroke:INK3, lineWidth:1, opacity:.6, endArrow:true, endArrowSize:7 }
+      },
+      // rankdir TB 读作「上游在上、下游在下」；横向链路改成 'LR'
+      layout:{ type:'antv-dagre', rankdir:'TB', nodesep:22, ranksep:46 },
+      // 平移缩放对稠密图是必要功能；hover 高亮邻居是在回答「它影响谁」
+      behaviors:['drag-canvas','zoom-canvas',{ type:'hover-activate', degree:1 }]
+    });
+    graph.render();
+  }
+
+  if (window.__g6fail || !window.G6) { outline(); return; }
+  try { draw(); } catch(e) { outline(); }
+})();
+</script>
+</html>

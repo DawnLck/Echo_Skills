@@ -1,0 +1,128 @@
+<!-- ============================================================
+  静态 SVG 图解 · 流程 / 机制 / 架构 / 判定分支
+  何时用：结构能被准确枚举，且不需要交互。无外部依赖，永不加载失败。
+  为什么竖排：竖向流程在窄屏按比例缩放后仍然可读；横排图在 360px 宽会把
+  13px 文字压到 6px。需要横排时把 <svg> 套进
+  <div style="overflow-x:auto"> 并给 svg 设 min-width。
+  SVG 不会自动折行：框内文字保持短单行，解释性文字放到下面的 HTML 里。
+============================================================ -->
+<html style="margin:0;padding:0;">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>示例流程图 — 按主题替换</title>
+<style>
+:root{
+  --bg:#FBFBFA; --surface:#FFFFFF;
+  --ink:#1A1A18; --ink-2:#6B6B66; --ink-3:#9D9D96;
+  --line:rgba(26,26,24,.10); --line-soft:rgba(26,26,24,.055);
+  --accent:#3D5A80; --s2:#C96E4A; --s3:#5B8C6E;
+  --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#131312; --surface:#1A1A19;
+    --ink:#EDEDEA; --ink-2:#A2A29B; --ink-3:#6E6E67;
+    --line:rgba(237,237,234,.12); --line-soft:rgba(237,237,234,.07);
+    --accent:#8FADD6; --s2:#E8946B; --s3:#85BC9A;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg)}
+.viz{font-family:var(--font);color:var(--ink);background:var(--bg);
+  padding:28px 24px 22px;-webkit-font-smoothing:antialiased}
+.eyebrow{font-size:11px;letter-spacing:.10em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;margin:0 0 10px}
+.title{font-size:19px;line-height:1.35;font-weight:600;letter-spacing:-.011em;margin:0 0 7px}
+.lede{font-size:13.5px;line-height:1.62;color:var(--ink-2);margin:0 0 20px;max-width:62ch}
+.stage{max-width:470px;margin:0 auto}
+svg{display:block;width:100%;height:auto}
+.note{font-size:12px;line-height:1.62;color:var(--ink-2);
+  border-left:2px solid var(--line);padding-left:11px;margin:18px 0 0;max-width:62ch}
+.foot{margin:16px 0 0;padding-top:12px;border-top:1px solid var(--line-soft);
+  font-size:11.5px;line-height:1.6;color:var(--ink-3)}
+
+@media (max-width:560px){
+  .viz{padding:20px 16px 18px}
+  .title{font-size:17px}
+}
+
+/* —— SVG 样式一律走 class：CSS 变量不能写在 fill/stroke 属性里 —— */
+svg text{font-family:var(--font)}
+.box{fill:var(--surface);stroke:var(--line);stroke-width:1}
+.box-key{fill:var(--surface);stroke:var(--accent);stroke-width:1.4}
+.t{fill:var(--ink);font-size:13px;font-weight:600}
+.m{fill:var(--ink-3);font-size:10px;letter-spacing:.07em;font-weight:600}
+.edge-lbl{fill:var(--ink-2);font-size:10.5px}
+.ln{stroke:var(--ink-3);stroke-width:1;fill:none}
+.ln-dash{stroke:var(--ink-3);stroke-width:1;fill:none;stroke-dasharray:3 3;opacity:.7}
+.ah{fill:var(--ink-3)}
+.bdg{fill:var(--surface);stroke:var(--line);stroke-width:1}
+.bdg-t{fill:var(--ink-2);font-size:10px;font-weight:700}
+.ok{stroke:var(--s3)} .warn{stroke:var(--s2)}
+</style>
+
+<div class="viz">
+  <p class="eyebrow">流程</p>
+  <h1 class="title">请求从进入到落库经过的三道关卡</h1>
+  <p class="lede">校验失败的请求在第二步就被挡掉，不会产生写入；超限请求回到限流器重排，不丢弃。</p>
+
+  <div class="stage">
+  <svg viewBox="0 0 440 392" role="img" aria-label="三步流程与分支示意">
+    <defs>
+      <marker id="ah" viewBox="0 0 8 8" refX="7" refY="4"
+              markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0.5,0.5 L7,4 L0.5,7.5 Z" class="ah"/>
+      </marker>
+    </defs>
+
+    <!-- 步骤 1 -->
+    <rect class="box" x="120" y="28" width="200" height="58" rx="8"/>
+    <text class="t" x="220" y="51" text-anchor="middle">接入层</text>
+    <text class="m" x="220" y="69" text-anchor="middle">GATEWAY</text>
+    <circle class="bdg" cx="120" cy="57" r="11"/>
+    <text class="bdg-t" x="120" y="57" text-anchor="middle" dominant-baseline="central">1</text>
+
+    <path class="ln" d="M220,86 L220,106" marker-end="url(#ah)"/>
+
+    <!-- 步骤 2 -->
+    <rect class="box" x="120" y="112" width="200" height="58" rx="8"/>
+    <text class="t" x="220" y="135" text-anchor="middle">限流器</text>
+    <text class="m" x="220" y="153" text-anchor="middle">RATE LIMIT</text>
+    <circle class="bdg" cx="120" cy="141" r="11"/>
+    <text class="bdg-t" x="120" y="141" text-anchor="middle" dominant-baseline="central">2</text>
+
+    <path class="ln" d="M220,170 L220,190" marker-end="url(#ah)"/>
+
+    <!-- 步骤 3：判定点，用强调描边区分 -->
+    <rect class="box-key" x="120" y="196" width="200" height="58" rx="8"/>
+    <text class="t" x="220" y="219" text-anchor="middle">参数校验</text>
+    <text class="m" x="220" y="237" text-anchor="middle">VALIDATE</text>
+    <circle class="bdg" cx="120" cy="225" r="11"/>
+    <text class="bdg-t" x="120" y="225" text-anchor="middle" dominant-baseline="central">3</text>
+
+    <!-- 分支：先下探再左右分，拐角处不做圆角，保持图解感 -->
+    <path class="ln" d="M220,254 L220,280"/>
+    <path class="ln" d="M220,280 L116,280 L116,302" marker-end="url(#ah)"/>
+    <path class="ln" d="M220,280 L324,280 L324,302" marker-end="url(#ah)"/>
+    <text class="edge-lbl" x="150" y="274">通过</text>
+    <text class="edge-lbl" x="290" y="274" text-anchor="end">不通过</text>
+
+    <!-- 两个出口 -->
+    <rect class="box" x="28" y="308" width="176" height="54" rx="8"/>
+    <text class="t" x="116" y="330" text-anchor="middle">写入主库</text>
+    <text class="m" x="116" y="347" text-anchor="middle">COMMIT</text>
+
+    <rect class="box" x="236" y="308" width="176" height="54" rx="8"/>
+    <text class="t" x="324" y="330" text-anchor="middle">返回 400</text>
+    <text class="m" x="324" y="347" text-anchor="middle">REJECT</text>
+
+    <!-- 回流：虚线表示“不是主干路径” -->
+    <path class="ln-dash" d="M412,335 L426,335 L426,141 L320,141" marker-end="url(#ah)"/>
+  </svg>
+  </div>
+
+  <p class="note">虚线是超限请求的回流路径：它不会被丢弃，而是回到限流器等待下一个窗口。</p>
+  <p class="foot">示意图 · 不代表真实部署拓扑</p>
+</div>
+</html>

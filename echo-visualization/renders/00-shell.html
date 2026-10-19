@@ -1,0 +1,91 @@
+<!-- ============================================================
+  底座骨架 · 所有 render 的共同地基
+  何时用：任何 render 都从这里开始；单独用它做纯文字+结构化排版也可以。
+  改什么：<title>、eyebrow、title、lede、卡片内容、foot 的数据口径。
+  留什么：:root 的 token 块、.viz 的排版尺度、窄屏 media query。
+============================================================ -->
+<html style="margin:0;padding:0;">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>示例骨架 — 按主题替换</title>
+<style>
+/* —— 设计 token：改主题只改这里 ——————————————————
+   深色只写了 prefers-color-scheme 分支。若宿主用属性切换主题，
+   再补一份 :root[data-theme="dark"]{...} 复制同样的值。 */
+:root{
+  --bg:#FBFBFA; --surface:#FFFFFF;
+  --ink:#1A1A18; --ink-2:#6B6B66; --ink-3:#9D9D96;
+  --line:rgba(26,26,24,.10); --line-soft:rgba(26,26,24,.055);
+  --grid:rgba(26,26,24,.07);
+  --accent:#3D5A80;
+  --s1:#3D5A80; --s2:#C96E4A; --s3:#5B8C6E;
+  --s4:#8A6FA8; --s5:#B8902B; --s6:#4E8EA8;
+  --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#131312; --surface:#1A1A19;
+    --ink:#EDEDEA; --ink-2:#A2A29B; --ink-3:#6E6E67;
+    --line:rgba(237,237,234,.12); --line-soft:rgba(237,237,234,.07);
+    --grid:rgba(237,237,234,.08);
+    --accent:#8FADD6;
+    --s1:#8FADD6; --s2:#E8946B; --s3:#85BC9A;
+    --s4:#B59AD1; --s5:#E0C258; --s6:#73B9D6;
+  }
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg)}
+.viz{
+  font-family:var(--font); color:var(--ink); background:var(--bg);
+  padding:28px 24px 22px; -webkit-font-smoothing:antialiased;
+  font-variant-numeric:tabular-nums;
+}
+/* —— 排版层级：三级就够，别再加 —— */
+.eyebrow{font-size:11px;letter-spacing:.10em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;margin:0 0 10px}
+.title{font-size:19px;line-height:1.35;font-weight:600;letter-spacing:-.011em;margin:0 0 7px}
+.lede{font-size:13.5px;line-height:1.62;color:var(--ink-2);margin:0 0 22px;max-width:62ch}
+
+/* —— 结构件 —— */
+.card{background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--radius);padding:18px 18px 14px}
+.rule{height:1px;background:var(--line);border:0;margin:20px 0}
+.foot{margin:18px 0 0;padding-top:12px;border-top:1px solid var(--line-soft);
+  font-size:11.5px;line-height:1.6;color:var(--ink-3)}
+.foot b{font-weight:600;color:var(--ink-2)}
+
+/* —— 图例：手写比库生成的好看，且不会被裁切 —— */
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0 0 14px;
+  font-size:12px;color:var(--ink-2)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2.5px;
+  margin-right:6px;vertical-align:-1px}
+
+.note{font-size:12px;line-height:1.6;color:var(--ink-2);
+  border-left:2px solid var(--line);padding-left:11px;margin:14px 0 0}
+
+@media (max-width:560px){
+  .viz{padding:20px 16px 18px}
+  .title{font-size:17px}
+  .card{padding:15px 14px 12px}
+}
+</style>
+
+<div class="viz">
+  <p class="eyebrow">标签 / 分类</p>
+  <h1 class="title">一句话说清这张图回答了什么问题</h1>
+  <p class="lede">结论先行：把图想让人看出的那句话写在这里，让不看图的人也拿到答案。</p>
+
+  <div class="legend">
+    <span><i style="background:var(--s1)"></i>系列一</span>
+    <span><i style="background:var(--s2)"></i>系列二</span>
+  </div>
+
+  <div class="card">内容区：图表 / SVG / 表格 / 卡片放这里。</div>
+
+  <p class="note">需要补充的限定条件、口径差异或反例写在这里。</p>
+  <p class="foot"><b>数据</b>：来源与时间范围 · <b>口径</b>：单位与统计方式</p>
+</div>
+</html>

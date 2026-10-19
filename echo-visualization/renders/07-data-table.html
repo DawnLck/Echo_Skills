@@ -1,0 +1,141 @@
+<!-- ============================================================
+  排版型数据表 · 零依赖
+  何时用：读者要逐行查、要对比具体数值、或数字本身就是答案。
+  表格被低估了：多指标 × 少行数时，一张排好版的表比任何图都清楚。
+  三个让表格「有设计感」的做法：
+   1. 只留横向细线，去掉竖线和外框网格 —— 竖线会把视线切断。
+   2. 数字右对齐 + tabular-nums，个位对齐才能竖着比大小。
+   3. 单元格内嵌衬底条，让占比不用另画一张图。
+  行数 > 约 40、或需要透视/下钻时，改用 AntV S2（见 SKILL.md）。
+============================================================ -->
+<html style="margin:0;padding:0;">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>示例数据表 — 按主题替换</title>
+<style>
+:root{
+  --bg:#FBFBFA; --surface:#FFFFFF;
+  --ink:#1A1A18; --ink-2:#6B6B66; --ink-3:#9D9D96;
+  --line:rgba(26,26,24,.10); --line-soft:rgba(26,26,24,.055);
+  --accent:#3D5A80; --s2:#C96E4A; --s3:#5B8C6E;
+  --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#131312; --surface:#1A1A19;
+    --ink:#EDEDEA; --ink-2:#A2A29B; --ink-3:#6E6E67;
+    --line:rgba(237,237,234,.12); --line-soft:rgba(237,237,234,.07);
+    --accent:#8FADD6; --s2:#E8946B; --s3:#85BC9A;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg)}
+.viz{font-family:var(--font);color:var(--ink);background:var(--bg);
+  padding:28px 24px 22px;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;letter-spacing:.10em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;margin:0 0 10px}
+.title{font-size:19px;line-height:1.35;font-weight:600;letter-spacing:-.011em;margin:0 0 7px}
+.lede{font-size:13.5px;line-height:1.62;color:var(--ink-2);margin:0 0 18px;max-width:62ch}
+
+/* 窄屏横向滚动，而不是把字压小或让它溢出 */
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;min-width:480px;border-collapse:collapse;font-size:13px}
+thead th{position:sticky;top:0;background:var(--bg);
+  font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;text-align:right;
+  padding:0 0 9px;border-bottom:1px solid var(--line);white-space:nowrap}
+thead th:first-child{text-align:left}
+tbody td{padding:10px 0;text-align:right;border-bottom:1px solid var(--line-soft);
+  white-space:nowrap}
+tbody td:first-child{text-align:left;font-weight:500}
+thead th + th,tbody td + td{padding-left:18px}
+tbody tr:hover td{background:var(--line-soft)}
+tfoot td{padding:11px 0 0;text-align:right;font-weight:600;
+  border-top:1px solid var(--line)}
+tfoot td:first-child{text-align:left}
+tfoot td + td{padding-left:18px}
+
+.delta.pos{color:var(--s3)} .delta.neg{color:var(--s2)}
+.dim{color:var(--ink-3)}
+/* 单元格内衬底条：宽度用 inline style 给百分比。
+   填充块靠右（margin-left:auto），和右对齐的数字共用同一条右基线；
+   若靠左起算，条会离自己的数字很远，看着像是串到隔壁列去了。 */
+.inbar{display:block;height:4px;border-radius:2px;background:var(--line);
+  margin-top:6px;overflow:hidden}
+.inbar i{display:block;height:100%;margin-left:auto;
+  background:var(--accent);border-radius:2px}
+.foot{margin:18px 0 0;padding-top:12px;border-top:1px solid var(--line-soft);
+  font-size:11.5px;line-height:1.6;color:var(--ink-3)}
+.foot b{font-weight:600;color:var(--ink-2)}
+@media (max-width:560px){.viz{padding:20px 16px 18px}.title{font-size:17px}}
+</style>
+
+<div class="viz">
+  <p class="eyebrow">示例数据 · 分渠道</p>
+  <h1 class="title">开放 API 贡献四成调用量，但它的留存最差</h1>
+  <p class="lede">调用量排第一的渠道，次周留存只有 29.4%——规模和质量在这张表里是反着走的。</p>
+
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">渠道</th>
+          <th scope="col">调用量</th>
+          <th scope="col">占比</th>
+          <th scope="col">次周留存</th>
+          <th scope="col">环比</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>开放 API</td>
+          <td>742,180</td>
+          <td>41.2%<span class="inbar"><i style="width:41.2%"></i></span></td>
+          <td>29.4%</td>
+          <td class="delta pos">+12.4%</td>
+        </tr>
+        <tr>
+          <td>移动端 SDK</td>
+          <td>519,340</td>
+          <td>28.8%<span class="inbar"><i style="width:28.8%"></i></span></td>
+          <td>44.1%</td>
+          <td class="delta pos">+8.1%</td>
+        </tr>
+        <tr>
+          <td>网页嵌入</td>
+          <td>331,020</td>
+          <td>18.4%<span class="inbar"><i style="width:18.4%"></i></span></td>
+          <td>41.7%</td>
+          <td class="delta neg">−2.6%</td>
+        </tr>
+        <tr>
+          <td>内部工具</td>
+          <td>148,660</td>
+          <td>8.3%<span class="inbar"><i style="width:8.3%"></i></span></td>
+          <td>62.8%</td>
+          <td class="delta pos">+3.0%</td>
+        </tr>
+        <tr>
+          <td class="dim">其他</td>
+          <td class="dim">59,800</td>
+          <td class="dim">3.3%<span class="inbar"><i style="width:3.3%;background:var(--ink-3)"></i></span></td>
+          <td class="dim">33.2%</td>
+          <td class="dim">—</td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td>合计</td>
+          <td>1,801,000</td>
+          <td>100%</td>
+          <td>38.2%</td>
+          <td class="delta pos">+6.8%</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <p class="foot"><b>数据</b>：示例数据，非真实业务数字 · <b>口径</b>：2025 年 12 月，次周留存按注册周队列计算</p>
+</div>
+</html>

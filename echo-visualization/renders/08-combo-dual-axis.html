@@ -1,0 +1,229 @@
+<!-- ============================================================
+  AntV G2 v5 · 分析型组合图（柱 + 线 · 双 y 轴 · 参考线 · 点标注）
+  何时用：同一根 x 轴上要同时读两种不同单位的量（如「概率%」和「收益率%」「金额」和「增速」），
+         并且结论依赖 x 轴上的几个关键位置（阈值、现价、成本、目标位）。
+  和 01 的区别：01 一根 y 轴只放一种单位；这里用「独立 y 比例尺 + 右轴」正式支持双轴。
+  六个关键做法，换数据时请保留：
+   1. x 用连续数值（linear），柱子用 rect 画（x/x1 自己算宽度）——
+      这样参考线可以落在任意数值上（3674 不必是某根柱子的类目）。interval 只能落在类目上。
+   2. 右轴那组 mark 都写 scale.y = { independent:true, domain:RIGHT }，且 domain 固定、
+      与左轴「零点对齐」：左轴 0~100 时右轴取 [-M, M]，左 50 正好对右 0。
+   3. 条件色写在 encode('color', d => 正/负) + scale color 的 domain/range 上，不在 style 里写函数。
+   4. 竖向参考线 = lineX + 一个 text mark（自己放位置、旋转），横向参考线 = lineY。
+      不用 lineX 自带的 label：位置和旋转都不好控，窄屏易被裁。
+   5. 每个 mark 都关入场动画（.animate 写在 mark 上；spec 写法是 animate:{enter:{type:null}}）。
+   6. CDN 失败 → 同数据表格；需要 PNG 文件 → scripts/export-png.sh 截图，
+      或干脆走 scripts/combo_chart.py（matplotlib，离线可用）。
+============================================================ -->
+<html style="margin:0;padding:0;">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>示例双轴组合图 — 按主题替换</title>
+<style>
+:root{
+  --bg:#FBFBFA; --surface:#FFFFFF;
+  --ink:#1A1A18; --ink-2:#6B6B66; --ink-3:#9D9D96;
+  --line:rgba(26,26,24,.10); --line-soft:rgba(26,26,24,.055);
+  --grid:rgba(26,26,24,.07);
+  --accent:#D62728;                     /* 主线：本图唯一的强调色 */
+  --pos:#B3DDB3; --neg:#D0D0D0;         /* 柱：正负条件色，刻意做浅，让主线压在上面 */
+  --r1:#1A1A18; --r2:#1F77B4; --r3:#FF7F0E; --r4:#9467BD;   /* 参考线：每条一色 */
+  --radius:10px;
+  /* 中文衬线（宋体系）—— 想要无衬线就换成 00-shell 里的 --font */
+  --font:"Noto Serif CJK SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#131312; --surface:#1A1A19;
+    --ink:#EDEDEA; --ink-2:#A2A29B; --ink-3:#8A8A83;
+    --line:rgba(237,237,234,.12); --line-soft:rgba(237,237,234,.07);
+    --grid:rgba(237,237,234,.08);
+    --accent:#FF6B6B;
+    --pos:#3E7A4E; --neg:#5C5C58;
+    --r1:#EDEDEA; --r2:#73B9D6; --r3:#F2A65A; --r4:#B59AD1;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg)}
+.viz{font-family:var(--font);color:var(--ink);background:var(--bg);
+  padding:24px 20px 18px;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;letter-spacing:.10em;color:var(--ink-3);font-weight:600;margin:0 0 8px}
+.title{font-size:17px;line-height:1.4;font-weight:600;margin:0 0 6px}
+.lede{font-size:13px;line-height:1.62;color:var(--ink-2);margin:0 0 12px;max-width:68ch}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0 0 6px;font-size:12px;color:var(--ink-2)}
+.legend i{display:inline-block;width:14px;height:9px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.legend i.ln{height:3px;vertical-align:3px;border-radius:2px}
+.wrap{position:relative}
+#chart{height:420px;width:100%}
+.ytitle{position:absolute;top:50%;font-size:12px;color:var(--ink-2);white-space:nowrap}
+.ytitle.l{left:-2px;transform:translate(-50%,-50%) rotate(-90deg) translateY(12px)}
+.ytitle.r{right:-2px;transform:translate(50%,-50%) rotate(90deg) translateY(12px)}
+.xtitle{text-align:center;font-size:12px;color:var(--ink-2);margin:-4px 0 0}
+.foot{margin:12px 0 0;padding-top:10px;border-top:1px solid var(--line-soft);
+  font-size:11.5px;line-height:1.6;color:var(--ink-3)}
+.foot b{font-weight:600;color:var(--ink-2)}
+#fallback{display:none;margin-top:4px;border:1px solid var(--line);border-radius:var(--radius);
+  overflow:auto;max-height:420px}
+#fallback table{width:100%;border-collapse:collapse;font-size:12.5px}
+#fallback th,#fallback td{padding:6px 12px;text-align:right;border-bottom:1px solid var(--line-soft)}
+#fallback th{font-size:11px;color:var(--ink-3);font-weight:600;background:var(--surface);position:sticky;top:0}
+#fallback th:first-child,#fallback td:first-child{text-align:left}
+.refs{display:none;font-size:11.5px;color:var(--ink-2);margin:0 0 6px}
+.refs b{font-weight:600}
+/* 窄屏：参考线挤在一起，旋转文字会互相压住 → 改成图上不写字、图例下方列出；轴标题并入图例的「左轴/右轴」 */
+@media (max-width:560px){.viz{padding:18px 12px 16px}.title{font-size:15.5px}#chart{height:320px}
+  .ytitle{display:none}.refs{display:block}}
+</style>
+
+<div class="viz">
+  <p class="eyebrow">示例数据 · 情景模型</p>
+  <h1 class="title">标题写结论：买在 3700 附近获利概率约 63%，过 3740 后预期收益转负</h1>
+  <p class="lede">导语一句话：左轴是概率（红线），右轴是预期收益率（柱，绿正灰负）；虚线是几个关键点位。</p>
+
+  <!-- 手写图例：线用细长条，柱用色块 -->
+  <div class="legend">
+    <span><i class="ln" style="background:var(--accent)"></i>3个月内获利概率（左轴）</span>
+    <span><i style="background:var(--pos)"></i>预期收益率 ≥ 0（右轴）</span>
+    <span><i style="background:var(--neg)"></i>预期收益率 &lt; 0（右轴）</span>
+  </div>
+
+  <p class="refs" id="refs"></p>
+  <div class="wrap">
+    <span class="ytitle l">获利概率 (%)</span>
+    <span class="ytitle r">预期收益率 (%)</span>
+    <div id="chart"></div>
+  </div>
+  <p class="xtitle" id="xtitle">上证买入点位</p>
+  <div id="fallback"></div>
+
+  <p class="foot"><b>注</b>：示例数据，按主题替换口径与来源。</p>
+</div>
+
+<script src="https://unpkg.com/@antv/g2@5.4.8/dist/g2.min.js"
+        onerror="window.__g2fail=1"></script>
+<script>
+(function(){
+  // ============ 1. 数据（内联、自包含）—— 只改这一段 ============
+  // 示例数据（形状示意，非真实测算）。x 等距时只写起点、步长和两列数组即可
+  var X0 = 3550, X_STEP = 10;                        // 起点、柱子间距（x 的数值步长）
+  var PROB = [75.0,74.5,74.0,73.5,72.9,72.3,71.6,70.9,70.1,69.3,68.4,67.5,66.5,65.5,64.4,63.2,
+              61.9,60.5,58.9,57.2,55.4,53.5,51.6,49.7,47.8,46.0,44.2,42.3,40.5,38.6,36.7,34.8,
+              32.9,31.0,29.1,27.2,25.3,23.5,21.7,19.8,18.0];          // 左轴：主线
+  var RET  = [5.20,4.91,4.61,4.31,4.02,3.72,3.42,3.13,2.85,2.57,2.30,2.04,1.79,1.55,
+              1.31,1.07,0.83,0.59,0.35,0.10,-0.16,-0.41,-0.68,-0.94,-1.21,-1.47,-1.74,-2.01,
+              -2.27,-2.54,-2.80,-3.06,-3.32,-3.58,-3.84,-4.10,-4.36,-4.62,-4.88,-5.14,-5.40]; // 右轴：柱
+  var ROWS = PROB.map(function(p, i){ return { x:X0 + i * X_STEP, prob:p, ret:RET[i] }; });
+  var LEFT  = [0, 100];          // 左轴范围
+  var RIGHT = [-6, 6];           // 右轴范围：与左轴零点对齐（左 50 ↔ 右 0）
+  var LABEL_AT = [3600, 3700, 3800, 3900];          // 在主线上打数值标注的点
+  var VLINES = [                                     // 竖向参考线
+    { x:3674, text:'生死线3674', token:'--r1' },
+    { x:3700, text:'当前约3700', token:'--r2' },
+    { x:3820, text:'转强3820',   token:'--r3' },
+    { x:3934, text:'平均成本3934', token:'--r4' }
+  ];
+  var HLINE_LEFT = 50;           // 左轴上的横向参考线（50% 概率）；不要就设 null
+  var X_TICK = 50;               // x 轴每隔多少显示一个刻度
+
+  // ============ 2. 主题 token ============
+  var css = getComputedStyle(document.documentElement);
+  var T = function(n){ return css.getPropertyValue(n).trim(); };
+  var FONT = T('--font'), INK = T('--ink'), INK2 = T('--ink-2'), INK3 = T('--ink-3'),
+      GRID = T('--grid'), LINE = T('--line'), ACC = T('--accent');
+  var isDark = matchMedia('(prefers-color-scheme: dark)').matches
+            && document.documentElement.dataset.theme !== 'light';
+  var NOANIM = { enter:{ type:null, duration:0 } };  // 每个 mark 都要带
+  // classic 主题给轴文字/轴线/网格都预乘了透明度，不显式写 *Opacity:1 会整体发灰
+  var AX = { labelFill:INK2, labelOpacity:1, labelFontSize:11, labelFontFamily:FONT, title:false,
+             line:true, lineStroke:INK3, lineLineWidth:1, lineStrokeOpacity:1,
+             tick:true, tickStroke:INK3, tickStrokeOpacity:1 };
+
+  function table(){
+    var h = '<table><thead><tr><th>点位</th><th>获利概率 %</th><th>预期收益率 %</th></tr></thead><tbody>';
+    ROWS.forEach(function(r){ h += '<tr><td>'+r.x+'</td><td>'+r.prob+'</td><td>'+r.ret+'</td></tr>'; });
+    var fb = document.getElementById('fallback');
+    fb.innerHTML = h + '</tbody></table>'; fb.style.display = 'block';
+    document.querySelector('.wrap').style.display = 'none';
+    document.getElementById('xtitle').style.display = 'none';
+  }
+
+  function draw(){
+    var W = X_STEP * 0.36;                           // 柱子半宽（占步长 72%）
+    var xMin = ROWS[0].x - X_STEP * 1.5, xMax = ROWS[ROWS.length-1].x + X_STEP * 1.5;
+    var XS = { type:'linear', domain:[xMin, xMax], nice:false,
+               tickMethod:function(){ var t = [];                // 刻度自己给：整 X_TICK 落点
+                 for (var v = Math.ceil(ROWS[0].x / X_TICK) * X_TICK; v <= ROWS[ROWS.length-1].x; v += X_TICK) t.push(v);
+                 return t; } };
+    var YL = { domain:LEFT, nice:false };
+    var YR = { independent:true, domain:RIGHT, nice:false };
+    var labelRows = ROWS.filter(function(r){ return LABEL_AT.indexOf(r.x) > -1; });
+
+    var children = [
+      // —— 右轴组：柱（rect）——
+      { type:'rect', data:ROWS,
+        encode:{ x:function(d){return d.x - W;}, x1:function(d){return d.x + W;},
+                 y:function(){return 0;}, y1:'ret',
+                 color:function(d){ return d.ret >= 0 ? 'pos' : 'neg'; } },
+        scale:{ x:XS, y:YR, color:{ domain:['pos','neg'], range:[T('--pos'), T('--neg')] } },
+        axis:{ y:Object.assign({}, AX, { position:'right', grid:false, tickCount:6 }), x:false },
+        style:{ fillOpacity:1 }, legend:false, animate:NOANIM,
+        tooltip:{ items:[{ channel:'y1', name:'预期收益率 %' }] } },
+      // 右轴零线
+      { type:'lineY', data:[0], encode:{ y:function(d){return d;} },
+        scale:{ y:YR }, axis:false,
+        style:{ stroke:INK2, lineWidth:1, strokeOpacity:1 }, animate:NOANIM, tooltip:false },
+
+      // —— 左轴组：50% 虚线、主线、点标注 ——
+      { type:'line', data:ROWS,
+        encode:{ x:'x', y:'prob', shape:'smooth' },
+        scale:{ x:XS, y:YL },
+        axis:{
+          y:Object.assign({}, AX, { position:'left', grid:false, tickCount:6 }),
+          x:Object.assign({}, AX, { grid:false })
+        },
+        style:{ stroke:ACC, lineWidth:3, lineCap:'round', strokeOpacity:1 }, animate:NOANIM,
+        tooltip:{ items:[{ channel:'y', name:'获利概率 %' }] } },
+      { type:'text', data:labelRows,
+        encode:{ x:'x', y:'prob', text:function(d){ return Math.round(d.prob) + '%'; } },
+        scale:{ x:XS, y:YL },
+        style:{ fill:ACC, fontSize:12, fontFamily:FONT, textAlign:'left', textBaseline:'bottom',
+                dx:-8, dy:-6, stroke:T('--bg'), lineWidth:3 },      // 描边当底色，压线也读得清
+        animate:NOANIM, tooltip:false }
+    ];
+    if (HLINE_LEFT != null) children.push(
+      { type:'lineY', data:[HLINE_LEFT], encode:{ y:function(d){return d;} }, scale:{ y:YL },
+        style:{ stroke:INK2, lineWidth:1, lineDash:[2,3], strokeOpacity:1 }, animate:NOANIM, tooltip:false });
+
+    // —— 竖向参考线 + 旋转文字（窄屏只画线，文字列到图例下方）——
+    var narrow = document.getElementById('chart').clientWidth < 520;
+    document.getElementById('refs').innerHTML = '虚线：' + VLINES.map(function(v){
+      return '<b style="color:var(' + v.token + ')">' + v.text + '</b>'; }).join(' · ');
+    VLINES.forEach(function(v){
+      var c = T(v.token);
+      children.push(
+        { type:'lineX', data:[v.x], encode:{ x:function(d){return d;} }, scale:{ x:XS },
+          style:{ stroke:c, lineWidth:1.2, lineDash:[5,3], strokeOpacity:1 }, animate:NOANIM, tooltip:false },
+        { type:'text', data:[v], encode:{ x:'x', y:function(){ return LEFT[1] - (LEFT[1] - LEFT[0]) * .02; }, text:'text' },
+          scale:{ x:XS, y:YL },
+          // 旋转必须用 labelTransform：5.4.8 的 text 会把外层 transform/rotate 覆盖掉，写了也不转
+          style:{ fill:c, fontSize:11.5, fontFamily:FONT, textAlign:'left', textBaseline:'bottom',  // 别用 top：旋转后字形会被裁掉一半
+                  labelTransform:'translate(15,0) rotate(90)', labelTransformOrigin:'left center' },
+          animate:NOANIM, tooltip:false });
+      if (narrow) children.pop();                     // 去掉文字，只留线
+    });
+
+    var chart = new G2.Chart({ container:'chart', autoFit:true });
+    chart.options({
+      type:'view', autoFit:true,
+      theme:{ type: isDark ? 'classicDark' : 'classic', view:{ viewFill:'transparent' } },
+      paddingTop:10, paddingRight:44, paddingBottom:30, paddingLeft:44,
+      children:children
+    });
+    chart.render();
+  }
+
+  if (window.__g2fail || !window.G2) { table(); return; }
+  try { draw(); } catch(e) { console.error(e); table(); }
+})();
+</script>
+</html>

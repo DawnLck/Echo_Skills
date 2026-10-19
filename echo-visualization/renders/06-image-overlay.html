@@ -1,0 +1,113 @@
+<!-- ============================================================
+  原图叠加标注
+  何时用：结论依赖原图里的真实位置、数量、边界或配对关系。
+  不可动摇的一条：原图像素不许改 —— 不裁剪、不滤镜、不缩放变形、
+  不重绘。标注是盖在上面的一层，撤掉这层应当还原出原图。
+  坐标全部用百分比，所以图片怎么缩放标注都跟得住。
+  关键排版手法：图上只放编号，说明文字放到图下的有序列表里。
+  这样既不会遮挡证据，也不会出现 SVG/绝对定位文字被裁切的老问题。
+============================================================ -->
+<html style="margin:0;padding:0;">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>示例原图标注 — 按主题替换</title>
+<style>
+:root{
+  --bg:#FBFBFA; --surface:#FFFFFF;
+  --ink:#1A1A18; --ink-2:#6B6B66; --ink-3:#9D9D96;
+  --line:rgba(26,26,24,.10); --line-soft:rgba(26,26,24,.055);
+  --accent:#3D5A80; --s2:#C96E4A; --s3:#5B8C6E;
+  --radius:10px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#131312; --surface:#1A1A19;
+    --ink:#EDEDEA; --ink-2:#A2A29B; --ink-3:#6E6E67;
+    --line:rgba(237,237,234,.12); --line-soft:rgba(237,237,234,.07);
+    --accent:#8FADD6; --s2:#E8946B; --s3:#85BC9A;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg)}
+.viz{font-family:var(--font);color:var(--ink);background:var(--bg);
+  padding:28px 24px 22px;-webkit-font-smoothing:antialiased}
+.eyebrow{font-size:11px;letter-spacing:.10em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;margin:0 0 10px}
+.title{font-size:19px;line-height:1.35;font-weight:600;letter-spacing:-.011em;margin:0 0 7px}
+.lede{font-size:13.5px;line-height:1.62;color:var(--ink-2);margin:0 0 18px;max-width:62ch}
+
+/* —— 原图层 —— */
+.shot{position:relative;display:block;margin:0;line-height:0;
+  border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.shot .base{display:block;width:100%;height:auto}      /* 不设 object-fit，不裁剪 */
+/* 占位底图：正式使用时整块替换成 <img class="base" src="https://…"> */
+.standin{width:100%;aspect-ratio:3/2;background:
+  linear-gradient(0deg,var(--line-soft) 1px,transparent 1px) 0 0/100% 7.14%,
+  linear-gradient(90deg,var(--line-soft) 1px,transparent 1px) 0 0/4.76% 100%,
+  var(--surface)}
+
+/* —— 标注层：坐标用 %，跟着图片缩放 —— */
+.badge{position:absolute;transform:translate(-50%,-50%);
+  width:22px;height:22px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11.5px;font-weight:700;line-height:1;
+  color:#fff;background:var(--accent);
+  box-shadow:0 0 0 2px rgba(255,255,255,.92);}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .badge{box-shadow:0 0 0 2px rgba(0,0,0,.72)}
+}
+.badge.alt{background:var(--s2)}
+/* 区域框：left/top/width/height 全部给 % */
+.box{position:absolute;border:1.5px solid var(--accent);border-radius:5px;
+  background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.box.alt{border-color:var(--s2);background:color-mix(in srgb,var(--s2) 7%,transparent)}
+/* 短标签贴图用；长句子一律放到下面的列表 */
+.chip{position:absolute;transform:translate(-50%,-50%);
+  font-size:10.5px;font-weight:600;line-height:1;white-space:nowrap;
+  color:var(--ink);background:var(--surface);
+  border:1px solid var(--line);border-radius:5px;padding:4px 7px}
+
+/* —— 说明：编号对应图上的 badge —— */
+.keys{list-style:none;margin:16px 0 0;padding:0;counter-reset:k}
+.keys li{position:relative;padding:0 0 0 30px;margin:0 0 9px;
+  font-size:13px;line-height:1.6;color:var(--ink-2);counter-increment:k}
+.keys li::before{content:counter(k);position:absolute;left:0;top:1px;
+  width:20px;height:20px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;color:#fff;background:var(--accent)}
+.keys li.alt::before{background:var(--s2)}
+.keys li b{color:var(--ink);font-weight:600}
+
+.foot{margin:18px 0 0;padding-top:12px;border-top:1px solid var(--line-soft);
+  font-size:11.5px;line-height:1.6;color:var(--ink-3)}
+@media (max-width:560px){.viz{padding:20px 16px 18px}.title{font-size:17px}
+  .badge{width:20px;height:20px;font-size:10.5px}}
+</style>
+
+<div class="viz">
+  <p class="eyebrow">原图标注</p>
+  <h1 class="title">三处标注指向同一个问题：右下角的区域被重复计数</h1>
+  <p class="lede">编号对应下方说明。原图未做任何裁剪、缩放或滤镜处理，标注是独立的一层。</p>
+
+  <figure class="shot">
+    <!-- 正式使用时把下面这一行 standin 换成真实原图，百分比坐标不用改：
+         <img class="base" src="https://…原图URL…" alt="原图内容说明"> -->
+    <div class="standin" role="img" aria-label="原图占位"></div>
+
+    <div class="box" style="left:58%;top:56%;width:34%;height:33%"></div>
+    <div class="badge"            style="left:24%;top:30%">1</div>
+    <div class="badge"            style="left:47%;top:44%">2</div>
+    <div class="badge alt"        style="left:58%;top:56%">3</div>
+    <div class="chip"             style="left:75%;top:50%">重复计数区</div>
+  </figure>
+
+  <ol class="keys">
+    <li><b>左上角的计数起点</b>——这里开始编号，与图例声明的方向一致。</li>
+    <li><b>中部的分界线</b>——两个统计区在此交界，边界本身没有归属声明。</li>
+    <li class="alt"><b>右下角的重叠区</b>——同时落在两个统计区内，因此被计了两次。</li>
+  </ol>
+
+  <p class="foot">标注层可完整撤除并还原原图 · 占位底图仅用于演示坐标系统</p>
+</div>
+</html>
